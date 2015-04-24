@@ -4,14 +4,24 @@ import urllib2 as url
 import datetime, time
 from sqlalchemy import create_engine
 
+# import pdb
+# pdb.set_trace()
+
 def pull_daily_record(date, \
-    url_format="http://www.wunderground.com/history/airport/KNYC/YYYY/M/D/DailyHistory.html?format=1", \
+    url_format="http://www.wunderground.com/history/airport/KNYC/YYYY/MM/DD/DailyHistory.html?format=1", \
     outfile_base="/home/vagrant/citibike/weather_data/knyc_"):
     
-    url_path = url_format.replace("YYYY", str(date.year)).replace("M", str(date.month)).replace("D", str(date.day))
-    url_string = url.urlopen(url_path).read()
-    url_string = url_string[1:]
-    url_string = url_string.replace("<br />", "")
+    url_path = url_format.replace("YYYY", str(date.year)).replace("MM", str(date.month)).replace("DD", str(date.day))
+#     pdb.set_trace()
+    try:
+        url_string = url.urlopen(url_path).read()
+        url_string = url_string[1:]
+        url_string = url_string.replace("<br />", "")
+    except: # Try once more if first attempt fails
+        print "Failed to open", url_path, "; trying once more..."
+        url_string = url.urlopen(url_path).read()
+        url_string = url_string[1:]
+        url_string = url_string.replace("<br />", "")
     outfile = file(outfile_base + date.strftime("%Y-%m-%d") + ".csv", "w")
     outfile.write(url_string)
     outfile.close()
@@ -46,6 +56,7 @@ def build_weather_dataframe(start_date, end_date, filebase="/home/vagrant/citibi
             day_df = day_df.ix[:, cols]
             all_df = all_df.append(day_df, ignore_index=True)
         except:
+            print "Failed to read", filename
             continue
     
     all_df = all_df.sort("DateUTC")
@@ -54,12 +65,16 @@ def build_weather_dataframe(start_date, end_date, filebase="/home/vagrant/citibi
 # import pdb
 # pdb.set_trace()
 
-start_date = datetime.date(2013,7,1)
-end_date = datetime.date(2014,8,31)
-df = build_weather_dataframe(start_date, end_date)
+pull_start_date = datetime.date(2014,9,1)
+pull_end_date = datetime.date(2015,2,28)
+pull_weather(pull_start_date, pull_end_date)
+
+df_start_date = datetime.date(2013,8,1)
+df_end_date = datetime.date(2015,2,28)
+df = build_weather_dataframe(df_start_date, df_end_date)
 
 # Write database to a single file for quick loading
-outfilename = "/home/vagrant/citibike/weatherDB_" + start_date.strftime("%Y-%m-%d") + "_to_" \
-    + end_date.strftime("%Y-%m-%d") + ".csv"
+outfilename = "/home/vagrant/citibike/weatherDB_" + df_start_date.strftime("%Y-%m-%d") + "_to_" \
+    + df_end_date.strftime("%Y-%m-%d") + ".csv"
 df.to_csv(outfilename)
 

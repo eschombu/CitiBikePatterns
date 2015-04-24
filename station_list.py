@@ -1,6 +1,7 @@
 import numpy as np
 from pandas import DataFrame, Series
 import pandas as pd
+from datetime import datetime, date, timedelta
 
 # Load Citi Bike data
 CBmonths = np.array([np.array([np.ones((6,1))*2013, np.ones((6,1))*2014]).flatten(), \

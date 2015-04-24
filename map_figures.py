@@ -1,5 +1,8 @@
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.cm
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 def gridCoords_fromCorners(corners, grid_dims):
     if type(corners) is not np.ndarray:
@@ -78,8 +81,33 @@ def arrayInds_from_LatLong(LatLong, LatLongGrid, grid_dims=None):
     return arrayInds
 
 
+def colorMappable_from_values(values, lims=None, cmap=mpl.cm.jet):
+    if not hasattr(values, 'size'):
+        values = np.array(values)
+    
+    if lims is None:
+        lims = [values.min(), values.max()]
+    elif not hasattr(lims, '__len__'):
+        print 'WARNING: lims argument is a scalar; ignoring and using max/min of values argument'
+        lims = [values.min(), values.max()]
+    elif len(lims) != 2:
+        print 'WARNING: lims argument has >2 elements; ignoring and using max/min of values argument'
+        lims = [values.min(), values.max()]
+    cMappable = mpl.cm.ScalarMappable(mpl.colors.Normalize(lims[0], lims[1], clip=True), cmap)
+    cMappable.set_array(values)
+    return cMappable
+
+
+class MapFig:
+    def __init__(self, fig=None, ax=None, img=None, pts=None, cbar=None):
+        if fig is None:
+            fig = plt.gcf()
+        if ax is None:
+            ax = plt.gca()
+
+
 def map_plot(map_img, points, LatLong=True, corners_LatLong=None, grid_LatLong=None, \
-             colors=None, marker='o', markersize=10):
+             values=None, colorMappable=None, alpha=None, marker='o', markersize=10, CBAR=True):
     if type(map_img) is str:
         map_img = plt.imread(fname=map_img)
     
@@ -103,24 +131,53 @@ def map_plot(map_img, points, LatLong=True, corners_LatLong=None, grid_LatLong=N
     else:
         points_inds = points
     
-    if colors is None:
-        colors = ['b' for i in range(points_inds.shape[0])]
-    elif type(colors) is tuple:
-        colors = [colors for i in range(points_inds.shape[0])]
-    elif len(colors.shape) == 1:
-        colors = [colors for i in range(points_inds.shape[0])]
+    if type(values) is str:
+        values = mpl.colors.colorConverter.to_rgba(values)
+    
+    if values is None:
+        values = [mpl.colors.colorConverter.to_rgba('b') for i in range(points_inds.shape[0])]
+    elif type(values) is tuple:
+        if len(values) == 3:
+            values = tuple(list(values) + [1])
+        values = [values for i in range(points_inds.shape[0])]
+    elif type(values) is not np.ndarray:
+        values = np.array(values)
+    
+    if type(values) is np.ndarray:
+        if colorMappable is None:
+            colorMappable_from_values(values)
+        colors = colorMappable.to_rgba(values)
+        colors = [tuple(colors[i,:]) for i in range(colors.shape[0])]
     else:
-        colors = [x[0] for x in zip(colors)]
+        colors = values
+        colorMappable = None
     
-    plt.imshow(map_img)
-    plt.gca().set_frame_on(False)
-    plt.gca().axes.get_xaxis().set_visible(False)
-    plt.gca().axes.get_yaxis().set_visible(False)
+    # Transparency
+    if alpha is not None:
+        for i in range(len(colors)):
+            colors[i] = tuple(list(colors[i][:3]) + [alpha])
     
-    pt_obj = []
+    mfig = MapFig()
+    mfig.img = plt.imshow(map_img)
+    mfig.fig = plt.gcf()
+    mfig.ax = plt.gca()
+    mfig.ax.set_frame_on(False)
+    mfig.ax.axes.get_xaxis().set_visible(False)
+    mfig.ax.axes.get_yaxis().set_visible(False)
+    
+    mfig.pts = []
     for i in range(points_inds.shape[0]):
-        pt_obj.append(plt.plot(points_inds[i,1], points_inds[i,0], color=colors[i], \
+        mfig.pts.append(plt.plot(points_inds[i,1], points_inds[i,0], color=colors[i], \
             marker=marker, markersize=markersize, markeredgecolor=None))
+    
+    if CBAR and (colorMappable is not None):
+        divider = make_axes_locatable(mfig.ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        mfig.cbar = plt.colorbar(colorMappable, cax)
+    
+    mfig.ax.margins(0)
+    mfig.fig.tight_layout()
+    return(mfig)
 
 
 def create_circles(xy_tuples, radii=None, colors_or_cmapNormInd=None):
